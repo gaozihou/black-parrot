@@ -75,6 +75,21 @@ logic proc_mem_cmd_v_lo, proc_mem_cmd_ready_li;
 bp_cce_mem_msg_s proc_mem_resp_li;
 logic proc_mem_resp_v_li, proc_mem_resp_yumi_lo;
 
+bp_cce_mem_msg_s a_proc_mem_cmd_lo;
+logic a_proc_mem_cmd_v_lo, a_proc_mem_cmd_yumi_li;
+bp_cce_mem_msg_s a_proc_mem_resp_li;
+logic a_proc_mem_resp_v_li, a_proc_mem_resp_ready_lo;
+
+bp_cce_mem_msg_s b_proc_mem_cmd_lo;
+logic b_proc_mem_cmd_v_lo, b_proc_mem_cmd_ready_li;
+bp_cce_mem_msg_s b_proc_mem_resp_li;
+logic b_proc_mem_resp_v_li, b_proc_mem_resp_yumi_lo;
+
+bp_cce_mem_msg_s nbf_proc_mem_cmd_lo;
+logic nbf_proc_mem_cmd_v_lo, nbf_proc_mem_cmd_yumi_li;
+bp_cce_mem_msg_s nbf_proc_mem_resp_li;
+logic nbf_proc_mem_resp_v_li, nbf_proc_mem_resp_ready_lo;
+
 bp_cce_mem_msg_s proc_io_cmd_lo;
 logic proc_io_cmd_v_lo, proc_io_cmd_ready_li;
 bp_cce_mem_msg_s proc_io_resp_li;
@@ -122,13 +137,13 @@ wrapper
    ,.io_resp_v_o(load_resp_v_li)
    ,.io_resp_ready_i(load_resp_ready_lo)
 
-   ,.mem_cmd_o(proc_mem_cmd_lo)
-   ,.mem_cmd_v_o(proc_mem_cmd_v_lo)
-   ,.mem_cmd_ready_i(proc_mem_cmd_ready_li)
+   ,.mem_cmd_o(b_proc_mem_cmd_lo)
+   ,.mem_cmd_v_o(b_proc_mem_cmd_v_lo)
+   ,.mem_cmd_ready_i(b_proc_mem_cmd_ready_li)
 
-   ,.mem_resp_i(proc_mem_resp_li)
-   ,.mem_resp_v_i(proc_mem_resp_v_li)
-   ,.mem_resp_yumi_o(proc_mem_resp_yumi_lo)
+   ,.mem_resp_i(b_proc_mem_resp_li)
+   ,.mem_resp_v_i(b_proc_mem_resp_v_li)
+   ,.mem_resp_yumi_o(b_proc_mem_resp_yumi_lo)
    );
 
 bp_mem
@@ -162,36 +177,140 @@ bp_mem
    ,.mem_resp_yumi_i(proc_mem_resp_yumi_lo)
    );
 
-logic nbf_done_lo, cfg_done_lo;
+logic nbf_done_lo, cfg_done_lo, dram_sel_lo;
 if (load_nbf_p)
   begin : nbf
     bp_nonsynth_nbf_loader
-     #(.bp_params_p(bp_params_p))
+     #(.bp_params_p(bp_params_p)
+      ,.skip_freeze_clear_p(preload_mem_p))
      nbf_loader
       (.clk_i(clk_i)
-       ,.reset_i(reset_i | ~cfg_done_lo)
+       ,.reset_i(reset_i | (preload_mem_p==0 & ~cfg_done_lo))
     
        ,.lce_id_i(lce_id_width_p'('b10))
     
-       ,.io_cmd_o(nbf_cmd_lo)
-       ,.io_cmd_v_o(nbf_cmd_v_lo)
-       ,.io_cmd_yumi_i(nbf_cmd_yumi_li)
+       ,.io_cmd_o(nbf_proc_mem_cmd_lo)
+       ,.io_cmd_v_o(nbf_proc_mem_cmd_v_lo)
+       ,.io_cmd_yumi_i(nbf_proc_mem_cmd_yumi_li)
     
-       ,.io_resp_i(nbf_resp_li)
-       ,.io_resp_v_i(nbf_resp_v_li)
-       ,.io_resp_ready_o(nbf_resp_ready_lo)
+       ,.io_resp_i(nbf_proc_mem_resp_li)
+       ,.io_resp_v_i(nbf_proc_mem_resp_v_li)
+       ,.io_resp_ready_o(nbf_proc_mem_resp_ready_lo)
     
        ,.done_o(nbf_done_lo)
        );
+    
+    if (preload_mem_p)
+      begin: bypass
+        logic [7:0] counter_r, counter_n;
+        logic nbf_done_r;
+        always_ff @(posedge clk_i)
+          begin
+            if (reset_i)
+              begin
+                counter_r <= 1;
+                nbf_done_r <= 0;
+              end
+            else if (nbf_done_lo)
+              begin
+                if (counter_r == 0)
+                  begin
+                    nbf_done_r <= 1;
+                  end
+                else
+                  begin
+                    counter_r <= counter_r + 1;
+                  end
+              end
+          end
+           
+        bp_nbf_to_cce_mem
+       #(.bp_params_p(bp_params_p)
+        ) nbf_adapter
+        (.clk_i(clk_i)
+        ,.reset_i(reset_i)
+
+        ,.io_cmd_i(nbf_proc_mem_cmd_lo)
+        ,.io_cmd_v_i(nbf_proc_mem_cmd_v_lo)
+        ,.io_cmd_yumi_o(nbf_proc_mem_cmd_yumi_li)
+
+        ,.io_resp_o(nbf_proc_mem_resp_li)
+        ,.io_resp_v_o(nbf_proc_mem_resp_v_li)
+        ,.io_resp_ready_i(nbf_proc_mem_resp_ready_lo)
+
+        ,.mem_cmd_o(a_proc_mem_cmd_lo)
+        ,.mem_cmd_v_o(a_proc_mem_cmd_v_lo)
+        ,.mem_cmd_yumi_i(a_proc_mem_cmd_yumi_li)
+
+        ,.mem_resp_i(a_proc_mem_resp_li)
+        ,.mem_resp_v_i(a_proc_mem_resp_v_li)
+        ,.mem_resp_ready_o(a_proc_mem_resp_ready_lo)
+        );
+        
+        assign dram_sel_lo = nbf_done_r;
+        
+        assign nbf_cmd_lo = '0;
+        assign nbf_cmd_v_lo = '0;
+        assign nbf_resp_ready_lo = 1'b1;
+      end
+    else
+      begin: direct
+        assign dram_sel_lo = 1'b1;
+        
+        assign nbf_cmd_lo = nbf_proc_mem_cmd_lo;
+        assign nbf_cmd_v_lo = nbf_proc_mem_cmd_v_lo;
+        assign nbf_proc_mem_cmd_yumi_li = nbf_cmd_yumi_li;
+        
+        assign nbf_proc_mem_resp_li = nbf_resp_li;
+        assign nbf_proc_mem_resp_v_li = nbf_resp_v_li;
+        assign nbf_resp_ready_lo = nbf_proc_mem_resp_ready_lo;
+      end
+    
   end
 else
   begin : no_nbf
+    assign dram_sel_lo = 1'b1;
+    
     assign nbf_resp_ready_lo = 1'b1;
     assign nbf_cmd_v_lo = '0;
     assign nbf_cmd_lo = '0;
 
     assign nbf_done_lo = 1'b1;
   end
+
+
+always_comb
+  begin
+    if (dram_sel_lo)
+      begin
+        proc_mem_cmd_lo = b_proc_mem_cmd_lo;
+        proc_mem_cmd_v_lo = b_proc_mem_cmd_v_lo;
+        b_proc_mem_cmd_ready_li = proc_mem_cmd_ready_li;
+        
+        b_proc_mem_resp_li = proc_mem_resp_li;
+        b_proc_mem_resp_v_li = proc_mem_resp_v_li;
+        proc_mem_resp_yumi_lo = b_proc_mem_resp_yumi_lo;
+        
+        a_proc_mem_cmd_yumi_li = a_proc_mem_cmd_v_lo;
+        a_proc_mem_resp_li = '0;
+        a_proc_mem_resp_v_li = 1'b0;
+      end
+    else
+      begin
+        proc_mem_cmd_lo = a_proc_mem_cmd_lo;
+        proc_mem_cmd_v_lo = a_proc_mem_cmd_v_lo & proc_mem_cmd_ready_li;
+        a_proc_mem_cmd_yumi_li = proc_mem_cmd_v_lo & proc_mem_cmd_ready_li;
+        
+        a_proc_mem_resp_li = proc_mem_resp_li;
+        a_proc_mem_resp_v_li = proc_mem_resp_v_li & a_proc_mem_resp_ready_lo;
+        proc_mem_resp_yumi_lo = a_proc_mem_resp_v_li & a_proc_mem_resp_ready_lo;
+        
+        b_proc_mem_cmd_ready_li = 1'b1;
+        b_proc_mem_resp_li = '0;
+        b_proc_mem_resp_v_li = 1'b0;
+      end
+  end
+
 
 localparam cce_instr_ram_addr_width_lp = `BSG_SAFE_CLOG2(num_cce_instr_ram_els_p);
 bp_cce_mmio_cfg_loader
@@ -200,11 +319,11 @@ bp_cce_mmio_cfg_loader
     ,.inst_ram_addr_width_p(cce_instr_ram_addr_width_lp)
     ,.inst_ram_els_p(num_cce_instr_ram_els_p)
     ,.skip_ram_init_p(skip_init_p)
-    ,.clear_freeze_p(!load_nbf_p)
+    ,.clear_freeze_p(!(load_nbf_p == 1 && preload_mem_p == 0))
     )
   cfg_loader
   (.clk_i(clk_i)
-   ,.reset_i(reset_i)
+   ,.reset_i(reset_i | (~dram_sel_lo))
 
    ,.lce_id_i(lce_id_width_p'('b10))
     
