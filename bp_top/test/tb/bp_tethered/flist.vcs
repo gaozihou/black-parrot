@@ -1,5 +1,7 @@
 # bsg_ip_cores files
 $BASEJUMP_STL_DIR/bsg_fsb/bsg_fsb_node_trace_replay.v
+$BASEJUMP_STL_DIR/bsg_dmc/bsg_dmc_pkg.v
+$BASEJUMP_STL_DIR/bsg_async/bsg_sync_sync.v
 # be files
 $BP_BE_DIR/test/common/bp_be_nonsynth_perf.v
 $BP_BE_DIR/test/common/bp_be_nonsynth_npc_tracer.v
@@ -27,4 +29,11 @@ $BP_TOP_DIR/test/common/dromajo_cosim.cpp
 $BP_TOP_DIR/test/common/bp_nonsynth_core_profiler.v
 $BP_TOP_DIR/test/common/bp_nonsynth_pc_profiler.v
 $BP_TOP_DIR/test/common/bp_nonsynth_branch_profiler.v
+
 $BP_TOP_DIR/test/common/bp_nbf_to_cce_mem.v
+$BP_TOP_DIR/test/common/bsg_tapeout_v1_tsmc40/toplevels/bsg_ac_black_parrot_quad_core_rc3/v/bsg_dmc_emulator.v
+$BP_TOP_DIR/test/common/bsg_tapeout_v1_tsmc40/toplevels/bsg_ac_black_parrot_quad_core_rc3/v/bsg_dfi_to_fifo.v
+$BP_TOP_DIR/test/common/bsg_tapeout_v1_tsmc40/toplevels/bsg_ac_black_parrot_quad_core_rc3/v/bsg_fifo_to_axi.v
+$BP_TOP_DIR/test/common/bsg_tapeout_v1_tsmc40/toplevels/bsg_ac_black_parrot_quad_core_rc3/v/bp_me_cce_to_xui.v
+$BP_TOP_DIR/test/common/bsg_tapeout_v1_tsmc40/toplevels/bsg_ac_black_parrot_quad_core_rc3/v/bsg_nonsynth_manycore_axi_mem.v
+$BP_TOP_DIR/test/common/bsg_tapeout_v1_tsmc40/toplevels/bsg_ac_black_parrot_quad_core_rc3/v/bsg_dmc_controller.v

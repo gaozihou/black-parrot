@@ -146,6 +146,269 @@ wrapper
    ,.mem_resp_yumi_o(b_proc_mem_resp_yumi_lo)
    );
 
+wire proc_mem_init_done_lo;
+
+if (load_nbf_p & preload_mem_p)
+  begin: lpddr
+  
+  logic dfi_clk_lo, axi_clk_lo, axi_reset_lo;
+  bsg_nonsynth_clock_gen 
+ #(.cycle_time_p(`BP_SIM_CLK_PERIOD*5))
+  dfi_clkgen 
+  (.o(dfi_clk_lo));
+  bsg_nonsynth_clock_gen 
+ #(.cycle_time_p(`BP_SIM_CLK_PERIOD/5))
+  axi_clkgen 
+  (.o(axi_clk_lo));
+  bsg_sync_sync #(.width_p(1)) axi_reset
+  (.oclk_i      ( axi_clk_lo   )
+  ,.iclk_data_i ( reset_i      )
+  ,.oclk_data_o ( axi_reset_lo ));
+  
+  // DMC
+  //localparam ui_addr_width_p = paddr_width_p; // word address (1 TB)
+  //localparam ui_data_width_p = dword_width_p;
+  //localparam burst_data_width_p = cce_block_width_p;
+  localparam dq_data_width_p = 32;
+  //localparam dq_group_lp = dq_data_width_p >> 3;
+  localparam axi_id_width_p = 6;
+  localparam axi_addr_width_p = 64;
+  localparam axi_data_width_p = 256;
+  localparam axi_burst_len_p = 2;
+  localparam axi_mem_els_p = 16777216; // 2 * 2 Gb
+  localparam axi_strb_width_lp = axi_data_width_p >> 3;
+  
+  localparam dmc_addr_width_gp = 28;
+  localparam dmc_data_width_gp = 32;
+  localparam clk_gen_num_adgs_gp = 1;
+
+  wire                              app_en_lo;
+  wire                              app_rdy_li;
+  wire                        [2:0] app_cmd_lo;
+  wire          [paddr_width_p-1:0] app_addr_lo;
+  wire      [dmc_addr_width_gp-1:0] app_addr_li = app_addr_lo[2+:dmc_addr_width_gp];
+
+  wire                              app_wdf_wren_lo;
+  wire                              app_wdf_rdy_li;
+  wire      [cce_block_width_p-1:0] app_wdf_data_lo;
+  wire [(cce_block_width_p>>3)-1:0] app_wdf_mask_lo;
+  wire                              app_wdf_end_lo;
+
+  wire                              app_rd_data_valid_li;
+  wire      [cce_block_width_p-1:0] app_rd_data_li;
+  wire                              app_rd_data_end_li;
+
+  wire                              axi_awready;
+  wire         [axi_id_width_p-1:0] axi_awid;
+  wire       [axi_addr_width_p-1:0] axi_awaddr;
+  wire                              axi_awvalid;
+  wire                              axi_wready;
+  wire       [axi_data_width_p-1:0] axi_wdata;
+  wire      [axi_strb_width_lp-1:0] axi_wstrb;
+  wire                              axi_wlast;
+  wire                              axi_wvalid;
+  wire         [axi_id_width_p-1:0] axi_bid;
+  wire                        [1:0] axi_bresp;
+  wire                              axi_bvalid;
+  wire                              axi_bready;
+  wire                              axi_arready;
+  wire         [axi_id_width_p-1:0] axi_arid;
+  wire       [axi_addr_width_p-1:0] axi_araddr;
+  wire                              axi_arvalid;
+  wire         [axi_id_width_p-1:0] axi_rid;
+  wire       [axi_data_width_p-1:0] axi_rdata;
+  wire                        [1:0] axi_rresp;
+  wire                              axi_rlast;
+  wire                              axi_rvalid;
+  wire                              axi_rready;
+
+  bp_me_cce_to_xui
+   #(.bp_params_p(bp_params_p)
+     ,.flit_width_p(mem_noc_flit_width_p)
+     ,.cord_width_p(mem_noc_cord_width_p)
+     ,.cid_width_p(mem_noc_cid_width_p)
+     ,.len_width_p(mem_noc_len_width_p)
+     )
+   dmc_link
+    (.clk_i(clk_i)
+     ,.reset_i(reset_i)
+
+     ,.mem_cmd_i(proc_mem_cmd_lo)
+     ,.mem_cmd_v_i(proc_mem_cmd_v_lo)
+     ,.mem_cmd_ready_o(proc_mem_cmd_ready_li)
+
+     ,.mem_resp_o(proc_mem_resp_li)
+     ,.mem_resp_v_o(proc_mem_resp_v_li)
+     ,.mem_resp_yumi_i(proc_mem_resp_yumi_lo)
+
+     ,.app_addr_o(app_addr_lo)
+     ,.app_cmd_o(app_cmd_lo)
+     ,.app_en_o(app_en_lo)
+     ,.app_rdy_i(app_rdy_li)
+     ,.app_wdf_wren_o(app_wdf_wren_lo)
+     ,.app_wdf_data_o(app_wdf_data_lo)
+     ,.app_wdf_mask_o(app_wdf_mask_lo)
+     ,.app_wdf_end_o(app_wdf_end_lo)
+     ,.app_wdf_rdy_i(app_wdf_rdy_li)
+     ,.app_rd_data_valid_i(app_rd_data_valid_li)
+     ,.app_rd_data_i(app_rd_data_li)
+     ,.app_rd_data_end_i(app_rd_data_end_li)
+     );
+  
+  import bsg_dmc_pkg::bsg_dmc_s;
+  bsg_dmc_s dmc_p;
+
+  assign dmc_p.trefi        = 16'h03ff;
+  assign dmc_p.tmrd         = 4'h1;
+  assign dmc_p.trfc         = 4'hf;
+  assign dmc_p.trc          = 4'ha;
+  assign dmc_p.trp          = 4'h3;
+  assign dmc_p.tras         = 4'h7;
+  assign dmc_p.trrd         = 4'h1;
+  assign dmc_p.trcd         = 4'h2;
+  assign dmc_p.twr          = 4'hb;
+  assign dmc_p.twtr         = 4'h7;
+  assign dmc_p.trtp         = 4'h8;
+  assign dmc_p.tcas         = 4'h3;
+  assign dmc_p.col_width    = 4'hb;
+  assign dmc_p.row_width    = 4'he;
+  assign dmc_p.bank_width   = 2'h2;
+  assign dmc_p.dqs_sel_cal  = 2'h0;
+  assign dmc_p.init_cmd_cnt = 4'h5;
+  assign dmc_p.bank_pos     = 6'h19;
+
+  wire   dmc_sys_reset_li   = reset_i;
+  
+  bsg_dmc_emulator #
+    (.num_adgs_p            ( clk_gen_num_adgs_gp )
+    ,.ui_addr_width_p       ( dmc_addr_width_gp   )
+    ,.ui_data_width_p       ( cce_block_width_p   )
+    ,.burst_data_width_p    ( cce_block_width_p   )
+    ,.dq_data_width_p       ( dmc_data_width_gp   )
+    ,.axi_id_width_p        ( axi_id_width_p      )
+    ,.axi_addr_width_p      ( axi_addr_width_p    )
+    ,.axi_data_width_p      ( axi_data_width_p    )
+    ,.axi_burst_len_p       ( axi_burst_len_p     ))
+  dmc
+    (.dmc_p_i               ( dmc_p                )
+    ,.sys_reset_i           ( dmc_sys_reset_li     )
+
+    // Application interface
+    ,.app_addr_i            ( app_addr_li          )
+    ,.app_cmd_i             ( app_cmd_lo           )
+    ,.app_en_i              ( app_en_lo            )
+    ,.app_rdy_o             ( app_rdy_li           )
+
+    ,.app_wdf_wren_i        ( app_wdf_wren_lo      )
+    ,.app_wdf_data_i        ( app_wdf_data_lo      )
+    ,.app_wdf_mask_i        ( app_wdf_mask_lo      )
+    ,.app_wdf_end_i         ( app_wdf_end_lo       )
+    ,.app_wdf_rdy_o         ( app_wdf_rdy_li       )
+
+    ,.app_rd_data_valid_o   ( app_rd_data_valid_li )
+    ,.app_rd_data_o         ( app_rd_data_li       )
+    ,.app_rd_data_end_o     ( app_rd_data_end_li   )
+
+    // Stubbed compatibility ports
+    ,.app_ref_req_i         ( 1'b0 )
+    ,.app_ref_ack_o         ()
+    ,.app_zq_req_i          ( 1'b0 )
+    ,.app_zq_ack_o          ()
+    ,.app_sr_req_i          ( 1'b0 )
+    ,.app_sr_active_o       ()
+
+    ,.init_calib_complete_o ( proc_mem_init_done_lo)
+
+    ,.ui_clk_i              ( clk_i                )
+    ,.dfi_clk_1x_i          ( dfi_clk_lo           )
+
+    ,.device_temp_o         (                      )
+    
+    ,.axi_clk_i             ( axi_clk_lo           )
+    ,.axi_reset_i           ( axi_reset_lo         )
+    ,.axi_fifo_error_o      (                      )
+
+    ,.axi_awready_i         ( axi_awready          )
+    ,.axi_awid_o            ( axi_awid             )
+    ,.axi_awaddr_o          ( axi_awaddr           )
+    ,.axi_awvalid_o         ( axi_awvalid          )
+    ,.axi_awlen_o           (                      )
+    ,.axi_awsize_o          (                      )
+    ,.axi_awburst_o         (                      )
+    ,.axi_awcache_o         (                      )
+    ,.axi_awprot_o          (                      )
+    ,.axi_awlock_o          (                      )
+    ,.axi_wready_i          ( axi_wready           )
+    ,.axi_wdata_o           ( axi_wdata            )
+    ,.axi_wstrb_o           ( axi_wstrb            )
+    ,.axi_wlast_o           ( axi_wlast            )
+    ,.axi_wvalid_o          ( axi_wvalid           )
+    ,.axi_bid_i             ( axi_bid              )
+    ,.axi_bresp_i           ( axi_bresp            )
+    ,.axi_bvalid_i          ( axi_bvalid           )
+    ,.axi_bready_o          ( axi_bready           )
+    ,.axi_arready_i         ( axi_arready          )
+    ,.axi_arid_o            ( axi_arid             )
+    ,.axi_araddr_o          ( axi_araddr           )
+    ,.axi_arvalid_o         ( axi_arvalid          )
+    ,.axi_arlen_o           (                      )
+    ,.axi_arsize_o          (                      )
+    ,.axi_arburst_o         (                      )
+    ,.axi_arcache_o         (                      )
+    ,.axi_arprot_o          (                      )
+    ,.axi_arlock_o          (                      )
+    ,.axi_rid_i             ( axi_rid              )
+    ,.axi_rdata_i           ( axi_rdata            )
+    ,.axi_rresp_i           ( axi_rresp            )
+    ,.axi_rlast_i           ( axi_rlast            )
+    ,.axi_rvalid_i          ( axi_rvalid           )
+    ,.axi_rready_o          ( axi_rready           )
+    );
+
+    bsg_nonsynth_manycore_axi_mem #(
+        .axi_id_width_p(axi_id_width_p)
+        ,.axi_addr_width_p(axi_addr_width_p)
+        ,.axi_data_width_p(axi_data_width_p)
+        ,.axi_burst_len_p(axi_burst_len_p)
+        ,.mem_els_p(axi_mem_els_p)
+        ,.bsg_dram_included_p(1)
+      ) axi_mem (
+        .clk_i(axi_clk_lo)
+        ,.reset_i(axi_reset_lo)
+
+        ,.axi_awid_i(axi_awid)
+        ,.axi_awaddr_i(axi_awaddr)
+        ,.axi_awvalid_i(axi_awvalid)
+        ,.axi_awready_o(axi_awready)
+
+        ,.axi_wdata_i(axi_wdata)
+        ,.axi_wstrb_i(axi_wstrb)
+        ,.axi_wlast_i(axi_wlast)
+        ,.axi_wvalid_i(axi_wvalid)
+        ,.axi_wready_o(axi_wready)
+
+        ,.axi_bid_o(axi_bid)
+        ,.axi_bresp_o(axi_bresp)
+        ,.axi_bvalid_o(axi_bvalid)
+        ,.axi_bready_i(axi_bready)
+
+        ,.axi_arid_i(axi_arid)
+        ,.axi_araddr_i(axi_araddr)
+        ,.axi_arvalid_i(axi_arvalid)
+        ,.axi_arready_o(axi_arready)
+
+        ,.axi_rid_o(axi_rid)
+        ,.axi_rdata_o(axi_rdata)
+        ,.axi_rresp_o(axi_rresp)
+        ,.axi_rlast_o(axi_rlast)
+        ,.axi_rvalid_o(axi_rvalid)
+        ,.axi_rready_i(axi_rready)
+      );
+  
+  end
+else
+  begin: bp_mem
+
 bp_mem
  #(.bp_params_p(bp_params_p)
    ,.mem_cap_in_bytes_p(mem_cap_in_bytes_p)
@@ -177,6 +440,10 @@ bp_mem
    ,.mem_resp_yumi_i(proc_mem_resp_yumi_lo)
    );
 
+assign proc_mem_init_done_lo = 1'b1;
+
+  end
+
 logic nbf_done_lo, cfg_done_lo, dram_sel_lo;
 if (load_nbf_p)
   begin : nbf
@@ -185,7 +452,7 @@ if (load_nbf_p)
       ,.skip_freeze_clear_p(preload_mem_p))
      nbf_loader
       (.clk_i(clk_i)
-       ,.reset_i(reset_i | (preload_mem_p==0 & ~cfg_done_lo))
+       ,.reset_i(reset_i | ~proc_mem_init_done_lo | (preload_mem_p==0 & ~cfg_done_lo))
     
        ,.lce_id_i(lce_id_width_p'('b10))
     
@@ -298,11 +565,11 @@ always_comb
     else
       begin
         proc_mem_cmd_lo = a_proc_mem_cmd_lo;
-        proc_mem_cmd_v_lo = a_proc_mem_cmd_v_lo & proc_mem_cmd_ready_li;
+        proc_mem_cmd_v_lo = a_proc_mem_cmd_v_lo;
         a_proc_mem_cmd_yumi_li = proc_mem_cmd_v_lo & proc_mem_cmd_ready_li;
         
         a_proc_mem_resp_li = proc_mem_resp_li;
-        a_proc_mem_resp_v_li = proc_mem_resp_v_li & a_proc_mem_resp_ready_lo;
+        a_proc_mem_resp_v_li = proc_mem_resp_v_li;
         proc_mem_resp_yumi_lo = a_proc_mem_resp_v_li & a_proc_mem_resp_ready_lo;
         
         b_proc_mem_cmd_ready_li = 1'b1;
@@ -323,7 +590,7 @@ bp_cce_mmio_cfg_loader
     )
   cfg_loader
   (.clk_i(clk_i)
-   ,.reset_i(reset_i | (~dram_sel_lo))
+   ,.reset_i(reset_i | ~proc_mem_init_done_lo | (~dram_sel_lo))
 
    ,.lce_id_i(lce_id_width_p'('b10))
     
@@ -337,6 +604,19 @@ bp_cce_mmio_cfg_loader
 
    ,.done_o(cfg_done_lo)
   );
+  
+  logic [31:0] exec_cycle_r;
+  bsg_counter_clear_up 
+ #(.max_val_p (64'(1<<32-1))
+  ,.init_val_p(0)
+  ) exec_cycle
+  (.clk_i     (clk_i)
+  ,.reset_i   (reset_i)
+  ,.clear_i   (~cfg_done_lo)
+  ,.up_i      (1'b1)
+  ,.count_o   (exec_cycle_r)
+  );
+  
 
 // CFG and NBF are mutex, so we can just use fixed arbitration here
 always_comb
