@@ -147,6 +147,7 @@ wrapper
    );
 
 wire proc_mem_init_done_lo;
+wire dmc_refresh_lo;
 
 if (load_nbf_p & preload_mem_p)
   begin: lpddr
@@ -318,6 +319,7 @@ if (load_nbf_p & preload_mem_p)
     ,.app_sr_active_o       ()
 
     ,.init_calib_complete_o ( proc_mem_init_done_lo)
+    ,.dmc_refresh_o         ( dmc_refresh_lo       )
 
     ,.ui_clk_i              ( clk_i                )
     ,.dfi_clk_1x_i          ( dfi_clk_lo           )
@@ -469,24 +471,36 @@ if (load_nbf_p)
     
     if (preload_mem_p)
       begin: bypass
-        logic [7:0] counter_r, counter_n;
-        logic nbf_done_r;
+        logic [31:0] counter_r;
+        logic nbf_done_r, ref_cycle_lo, ref_cycle_lo_r;
+        
+        bsg_sync_sync #(.width_p(1)) ref_cycle_bss
+        (.oclk_i      ( clk_i   )
+        ,.iclk_data_i ( dmc_refresh_lo )
+        ,.oclk_data_o ( ref_cycle_lo ));
+        
+        bsg_dff #(.width_p(1)) ref_cycle_dff
+        (.clk_i  (clk_i)
+        ,.data_i (ref_cycle_lo)
+        ,.data_o (ref_cycle_lo_r)
+        );
+        
         always_ff @(posedge clk_i)
           begin
             if (reset_i)
               begin
-                counter_r <= 1;
+                counter_r <= 0;
                 nbf_done_r <= 0;
               end
             else if (nbf_done_lo)
               begin
-                if (counter_r == 0)
+                if (counter_r == 2)
                   begin
                     nbf_done_r <= 1;
                   end
                 else
                   begin
-                    counter_r <= counter_r + 1;
+                    counter_r <= counter_r + (ref_cycle_lo & ~ref_cycle_lo_r);
                   end
               end
           end
