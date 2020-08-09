@@ -149,6 +149,21 @@ wrapper
 wire proc_mem_init_done_lo;
 wire dmc_refresh_lo;
 
+/*
+  logic [31:0] xui_cycle_r;
+  logic xui_node_done_lo;
+
+  bsg_counter_clear_up 
+ #(.max_val_p (64'(1<<32-1))
+  ,.init_val_p(0)
+  ) xui_cycle
+  (.clk_i     (clk_i)
+  ,.reset_i   (~proc_mem_init_done_lo)
+  ,.clear_i   (1'b0)
+  ,.up_i      (~xui_node_done_lo)
+  ,.count_o   (xui_cycle_r)
+  );
+*/
 if (load_nbf_p & preload_mem_p)
   begin: lpddr
   
@@ -255,7 +270,33 @@ if (load_nbf_p & preload_mem_p)
      ,.app_rd_data_i(app_rd_data_li)
      ,.app_rd_data_end_i(app_rd_data_end_li)
      );
-  
+
+/*
+  bsg_xui_stress_test_node
+   #(.addr_width_p(paddr_width_p)
+    ,.data_width_p(cce_block_width_p)
+    ,.num_requests_p(5000)
+    ,.nonblock_read_p(1)
+     )
+   xui_node
+    (.clk_i(clk_i)
+     ,.reset_i(~proc_mem_init_done_lo)
+     ,.done_o(xui_node_done_lo)
+
+     ,.app_addr_o(app_addr_lo)
+     ,.app_cmd_o(app_cmd_lo)
+     ,.app_en_o(app_en_lo)
+     ,.app_rdy_i(app_rdy_li)
+     ,.app_wdf_wren_o(app_wdf_wren_lo)
+     ,.app_wdf_data_o(app_wdf_data_lo)
+     ,.app_wdf_mask_o(app_wdf_mask_lo)
+     ,.app_wdf_end_o(app_wdf_end_lo)
+     ,.app_wdf_rdy_i(app_wdf_rdy_li)
+     ,.app_rd_data_valid_i(app_rd_data_valid_li)
+     ,.app_rd_data_i(app_rd_data_li)
+     ,.app_rd_data_end_i(app_rd_data_end_li)
+     );
+*/
   import bsg_dmc_pkg::bsg_dmc_s;
   bsg_dmc_s dmc_p;
 
