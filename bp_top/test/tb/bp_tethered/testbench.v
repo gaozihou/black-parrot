@@ -196,6 +196,8 @@ if (load_nbf_p & preload_mem_p)
   
   localparam dmc_addr_width_gp = 28;
   localparam dmc_data_width_gp = 32;
+  localparam dmc_cmd_afifo_depth_gp = 4;
+  localparam dmc_cmd_sfifo_depth_gp = 4;
   localparam clk_gen_num_adgs_gp = 1;
 
   wire                              app_en_lo;
@@ -315,8 +317,8 @@ if (load_nbf_p & preload_mem_p)
   assign dmc_p.col_width    = 4'hb;
   assign dmc_p.row_width    = 4'he;
   assign dmc_p.bank_width   = 2'h2;
-  assign dmc_p.dqs_sel_cal  = 2'h0;
-  assign dmc_p.init_cmd_cnt = 4'h5;
+  assign dmc_p.dqs_sel_cal  = 3'h0;
+  assign dmc_p.init_cycles  = 16'h9c4a;
   assign dmc_p.bank_pos     = 6'h19;
 
   wire   dmc_sys_reset_li   = reset_i;
@@ -327,6 +329,8 @@ if (load_nbf_p & preload_mem_p)
     ,.ui_data_width_p       ( cce_block_width_p   )
     ,.burst_data_width_p    ( cce_block_width_p   )
     ,.dq_data_width_p       ( dmc_data_width_gp   )
+    ,.cmd_afifo_depth_p     ( dmc_cmd_afifo_depth_gp )
+    ,.cmd_sfifo_depth_p     ( dmc_cmd_sfifo_depth_gp )
     ,.axi_id_width_p        ( axi_id_width_p      )
     ,.axi_addr_width_p      ( axi_addr_width_p    )
     ,.axi_data_width_p      ( axi_data_width_p    )

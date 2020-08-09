@@ -36,4 +36,4 @@ $BP_TOP_DIR/test/common/bsg_tapeout_v1_tsmc40/toplevels/bsg_ac_black_parrot_quad
 $BP_TOP_DIR/test/common/bsg_tapeout_v1_tsmc40/toplevels/bsg_ac_black_parrot_quad_core_rc3/v/bsg_fifo_to_axi.v
 $BP_TOP_DIR/test/common/bsg_tapeout_v1_tsmc40/toplevels/bsg_ac_black_parrot_quad_core_rc3/v/bp_me_cce_to_xui.v
 $BP_TOP_DIR/test/common/bsg_tapeout_v1_tsmc40/toplevels/bsg_ac_black_parrot_quad_core_rc3/v/bsg_nonsynth_manycore_axi_mem.v
-$BP_TOP_DIR/test/common/bsg_tapeout_v1_tsmc40/toplevels/bsg_ac_black_parrot_quad_core_rc3/v/bsg_dmc_controller.v
+$BASEJUMP_STL_DIR/bsg_dmc/bsg_dmc_controller.v
